@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -56,7 +58,7 @@ func main() {
 				Action: func(c *cli.Context) error {
 					//TODO Реализовать генирацию ID по аналогии с Git
 					t := Task{
-						ID:         "WS42K", //ID заглушка, для проверки работоспособности
+						ID:         makeID(c.String("content"), c.String("deadline")), //ID заглушка, для проверки работоспособности
 						Content:    c.String("content"),
 						Complete:   false,
 						Category:   c.String("category"),
@@ -68,6 +70,8 @@ func main() {
 						err := fmt.Errorf("content can't be empty")
 						return err
 					}
+
+					fmt.Println("\nID of task:", t.ID)
 
 					//TODO дописать регулярку для проверки правильности введеного дедлайна
 
@@ -134,7 +138,6 @@ func main() {
 					ID := c.Args().First()
 					Deadline := c.Args().Get(1)
 					if err := changeTask(ID, "Deadline", Deadline); err != nil {
-						//fmt.Println("failed to change the deadline:", err)
 						return err
 					}
 					fmt.Printf("deadline of task with ID %s changed on %s\n", ID, Deadline)
@@ -184,6 +187,9 @@ func changeTask(ID string, field string, value string) error {
 		return err
 	}
 	defer file.Close()
+
+	cnt := 1
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		j := scanner.Text()
@@ -202,6 +208,7 @@ func changeTask(ID string, field string, value string) error {
 						return err
 					}
 					t.Complete = val
+					cnt--
 				} else {
 					err := fmt.Errorf("this task is already complete")
 					return err
@@ -210,23 +217,29 @@ func changeTask(ID string, field string, value string) error {
 		case field == "Deadline":
 			if t.ID == ID {
 				t.Deadline = value
+				cnt--
 			}
 		case field == "Importance":
 			val, _ := strconv.Atoi(value)
 			if t.ID == ID {
 				t.Importance = val
+				cnt--
 			}
 		default:
 			err := fmt.Errorf("field does not exist")
 			return err
 		}
-
 		addTask(t, ".tempTaskFile")
 	}
 
-	os.Rename(".tempTaskFile", "task.json")
-	os.Remove(".tempTaskFile")
-	return nil
+	if cnt == 0 {
+		os.Rename(".tempTaskFile", "task.json")
+		return nil
+	} else {
+		err := fmt.Errorf("Task with this ID is not exist")
+		os.Remove(".tempTaskFile")
+		return err
+	}
 }
 
 func showTaskList(ctgry string) error {
@@ -245,14 +258,29 @@ func showTaskList(ctgry string) error {
 
 		if ctgry == "all" {
 			if !t.Complete {
-				fmt.Printf("[%s]\t -%s-\t***%s***\t\t <%s>\t !!%d\n", t.ID, t.Deadline, t.Content, t.Category, t.Importance)
+				fmt.Printf("[%s]\t -%s-\t %s\t\t Imp:%d\t\t  <%s>\n", t.ID, t.Deadline, t.Content, t.Importance, t.Category)
 			}
 		} else if t.Category == ctgry {
 			if !t.Complete {
-				fmt.Printf("[%s]\t ***%s***\t ##%s\t !!%d\n", t.ID, t.Content, t.Deadline, t.Importance)
+				fmt.Printf("[%s]\t -%s-\t %s \t\t Imp: %d\n", t.ID, t.Deadline, t.Content, t.Importance)
 			}
 		}
 
 	}
 	return nil
+}
+
+func makeID(content, deadline string) string {
+
+	str := content + deadline
+	sha256 := sha256.Sum256([]byte(str))
+	shaID := sha256[:4]
+
+	var b strings.Builder
+
+	for _, i := range shaID {
+		fmt.Fprintf(&b, "%x", i)
+	}
+
+	return b.String()
 }
