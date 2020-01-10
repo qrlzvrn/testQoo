@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +12,7 @@ import (
 )
 
 type Task struct {
-	ID         []byte
+	ID         string
 	Content    string
 	Complete   bool
 	Category   string
@@ -58,6 +56,7 @@ func main() {
 				Action: func(c *cli.Context) error {
 					//TODO Реализовать генирацию ID по аналогии с Git
 					t := Task{
+						ID:         "WS42K", //ID заглушка, для проверки работоспособности
 						Content:    c.String("content"),
 						Complete:   false,
 						Category:   c.String("category"),
@@ -70,18 +69,13 @@ func main() {
 						return err
 					}
 
-					t.ID = genID(c.String("content"), c.String("deadline"))
 					//TODO дописать регулярку для проверки правильности введеного дедлайна
 
 					if err := addTask(t, "task.json"); err != nil {
 						return err
 					}
 
-					fmt.Println("\nadded task: ", t.Content)
-					fmt.Println("task ID: ", t.ID)
-					fmt.Printf(" x: % x\n ", t.ID)
-					fmt.Printf("s : % s\n ", t.ID)
-					fmt.Printf("v : % v\n ", t.ID)
+					fmt.Println("added task: ", t.Content)
 					return nil
 
 				},
@@ -95,11 +89,7 @@ func main() {
 						err := fmt.Errorf("task ID cannot be empty")
 						return err
 					}
-
-					sliceByteID := []byte(ID)
-					fmt.Printf("Срез полученный из строки: %v", sliceByteID)
-
-					if err := changeTask(sliceByteID, "Complete", "true"); err != nil {
+					if err := changeTask(ID, "Complete", "true"); err != nil {
 						return err
 					}
 					fmt.Printf("task with id %s is complete\n", ID)
@@ -130,10 +120,7 @@ func main() {
 				Action: func(c *cli.Context) error {
 					ID := c.Args().First()
 					Importance := c.Args().Get(1)
-
-					sliceByteID := []byte(ID)
-
-					if err := changeTask(sliceByteID, "Importance", Importance); err != nil {
+					if err := changeTask(ID, "Importance", Importance); err != nil {
 						return err
 					}
 					fmt.Printf("importnace of task with ID %s changed on %s\n", ID, Importance)
@@ -146,10 +133,7 @@ func main() {
 				Action: func(c *cli.Context) error {
 					ID := c.Args().First()
 					Deadline := c.Args().Get(1)
-
-					sliceByteID := []byte(ID)
-
-					if err := changeTask(sliceByteID, "Deadline", Deadline); err != nil {
+					if err := changeTask(ID, "Deadline", Deadline); err != nil {
 						//fmt.Println("failed to change the deadline:", err)
 						return err
 					}
@@ -194,7 +178,7 @@ func addTask(t Task, filename string) error {
 	return nil
 }
 
-func changeTask(ID []byte, field string, value string) error {
+func changeTask(ID string, field string, value string) error {
 	file, err := openTaskFile()
 	if err != nil {
 		return err
@@ -211,7 +195,7 @@ func changeTask(ID []byte, field string, value string) error {
 
 		switch {
 		case field == "Complete":
-			if bytes.EqualFold(t.ID, ID) {
+			if t.ID == ID {
 				if !t.Complete {
 					val, err := strconv.ParseBool(value)
 					if err != nil {
@@ -224,12 +208,12 @@ func changeTask(ID []byte, field string, value string) error {
 				}
 			}
 		case field == "Deadline":
-			if bytes.EqualFold(t.ID, ID) {
+			if t.ID == ID {
 				t.Deadline = value
 			}
 		case field == "Importance":
 			val, _ := strconv.Atoi(value)
-			if bytes.EqualFold(t.ID, ID) {
+			if t.ID == ID {
 				t.Importance = val
 			}
 		default:
@@ -261,28 +245,14 @@ func showTaskList(ctgry string) error {
 
 		if ctgry == "all" {
 			if !t.Complete {
-				fmt.Printf("%v\t -%s-\t***%s***\t\t <%s>\t !!%d\n", t.ID, t.Deadline, t.Content, t.Category, t.Importance)
+				fmt.Printf("[%s]\t -%s-\t***%s***\t\t <%s>\t !!%d\n", t.ID, t.Deadline, t.Content, t.Category, t.Importance)
 			}
 		} else if t.Category == ctgry {
 			if !t.Complete {
-				fmt.Printf("%v\t ***%s***\t ##%s\t !!%d\n", t.ID, t.Content, t.Deadline, t.Importance)
+				fmt.Printf("[%s]\t ***%s***\t ##%s\t !!%d\n", t.ID, t.Content, t.Deadline, t.Importance)
 			}
 		}
 
 	}
 	return nil
-}
-
-func genID(content, deadline string) []byte {
-	str := content + deadline
-	fmt.Printf("Конкатенированная строка: %s\n", str)
-
-	sha256 := sha256.Sum256([]byte(str))
-	fmt.Println("SHA256 типа [32]byte: ", sha256)
-
-	shaID := sha256[:4]
-	fmt.Println("\nДелаем срез SHA256")
-	fmt.Println("shaID типа []byte:", shaID)
-
-	return shaID
 }
