@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-type Task struct {
+type task struct {
 	ID         string
 	Content    string
 	Complete   bool
@@ -25,40 +25,40 @@ type Task struct {
 func main() {
 	app := &cli.App{
 		Name:  "toqoo",
-		Usage: "blablabla",
+		Usage: "it is a simple cli program like todo.txt that uses json files for storing tasks.\n\nThis program can add, complete, show, and also reassign the importance and deadlines of tasks.",
 		Commands: []*cli.Command{
 			{
 				Name:  "add",
 				Usage: "add a new task",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
+						Name:     "content",
+						Aliases:  []string{"C"},
+						Usage:    "set task content",
+						Required: true,
+					},
+					&cli.StringFlag{
 						Name:    "category",
 						Aliases: []string{"c"},
 						Value:   "Purgatorium",
-						Usage:   "Задает категорию для добавляемой задачи",
+						Usage:   "set task category",
 					},
 					&cli.StringFlag{
 						Name:    "deadline",
 						Aliases: []string{"d"},
 						Value:   "00/00",
-						Usage:   "Задает дедлайн для добавляемой задачи",
+						Usage:   "set task deadline",
 					},
 					&cli.IntFlag{
 						Name:    "importance",
 						Aliases: []string{"i"},
 						Value:   0,
-						Usage:   "Задает важность добавляемой задачи",
-					},
-					&cli.StringFlag{
-						Name:    "content",
-						Aliases: []string{"C"},
-						Usage:   "Задает текст задачи",
+						Usage:   "set task importance",
 					},
 				},
 				Action: func(c *cli.Context) error {
-					//TODO Реализовать генирацию ID по аналогии с Git
-					t := Task{
-						ID:         makeID(c.String("content"), c.String("deadline")), //ID заглушка, для проверки работоспособности
+					t := task{
+						ID:         makeID(c.String("content"), c.String("deadline")),
 						Content:    c.String("content"),
 						Complete:   false,
 						Category:   c.String("category"),
@@ -67,11 +67,9 @@ func main() {
 					}
 
 					if t.Content == "" {
-						err := fmt.Errorf("content can't be empty")
+						err := fmt.Errorf("task content can't be empty")
 						return err
 					}
-
-					fmt.Println("\nID of task:", t.ID)
 
 					//TODO дописать регулярку для проверки правильности введеного дедлайна
 
@@ -86,7 +84,7 @@ func main() {
 			},
 			{
 				Name:  "complete",
-				Usage: "complete task",
+				Usage: "complete the task",
 				Action: func(c *cli.Context) error {
 					ID := c.Args().First()
 					if ID == "" {
@@ -96,7 +94,7 @@ func main() {
 					if err := changeTask(ID, "Complete", "true"); err != nil {
 						return err
 					}
-					fmt.Printf("task with id %s is complete\n", ID)
+					fmt.Printf("task with an id %s is complete\n", ID)
 					return nil
 				},
 			},
@@ -120,27 +118,27 @@ func main() {
 			},
 			{
 				Name:  "reImp",
-				Usage: "Позволяет переназначить Важность задачи",
+				Usage: "reassign task importance",
 				Action: func(c *cli.Context) error {
 					ID := c.Args().First()
 					Importance := c.Args().Get(1)
 					if err := changeTask(ID, "Importance", Importance); err != nil {
 						return err
 					}
-					fmt.Printf("importnace of task with ID %s changed on %s\n", ID, Importance)
+					fmt.Printf("importnace of task with an ID %s changed on %s\n", ID, Importance)
 					return nil
 				},
 			},
 			{
 				Name:  "reDead",
-				Usage: "Позволяет переназначить Дедлайн задачи",
+				Usage: "reassign task deadline",
 				Action: func(c *cli.Context) error {
 					ID := c.Args().First()
 					Deadline := c.Args().Get(1)
 					if err := changeTask(ID, "Deadline", Deadline); err != nil {
 						return err
 					}
-					fmt.Printf("deadline of task with ID %s changed on %s\n", ID, Deadline)
+					fmt.Printf("deadline of task with an ID %s changed on %s\n", ID, Deadline)
 
 					return nil
 				},
@@ -164,7 +162,7 @@ func openTaskFile() (*os.File, error) {
 	return file, nil
 }
 
-func addTask(t Task, filename string) error {
+func addTask(t task, filename string) error {
 	j, err := json.Marshal(t)
 	if err != nil {
 		return err
@@ -188,12 +186,12 @@ func changeTask(ID string, field string, value string) error {
 	}
 	defer file.Close()
 
-	cnt := 1
+	taskExist := false
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		j := scanner.Text()
-		t := Task{}
+		t := task{}
 		err := json.Unmarshal([]byte(j), &t)
 		if err != nil {
 			return err
@@ -208,7 +206,7 @@ func changeTask(ID string, field string, value string) error {
 						return err
 					}
 					t.Complete = val
-					cnt--
+					taskExist = true
 				} else {
 					err := fmt.Errorf("this task is already complete")
 					return err
@@ -217,26 +215,26 @@ func changeTask(ID string, field string, value string) error {
 		case field == "Deadline":
 			if t.ID == ID {
 				t.Deadline = value
-				cnt--
+				taskExist = true
 			}
 		case field == "Importance":
 			val, _ := strconv.Atoi(value)
 			if t.ID == ID {
 				t.Importance = val
-				cnt--
+				taskExist = true
 			}
 		default:
-			err := fmt.Errorf("field does not exist")
+			err := fmt.Errorf("field doesn't exist")
 			return err
 		}
 		addTask(t, ".tempTaskFile")
 	}
 
-	if cnt == 0 {
+	if taskExist == true {
 		os.Rename(".tempTaskFile", "task.json")
 		return nil
 	} else {
-		err := fmt.Errorf("Task with this ID is not exist")
+		err := fmt.Errorf("task with this ID does not exist")
 		os.Remove(".tempTaskFile")
 		return err
 	}
@@ -250,7 +248,7 @@ func showTaskList(ctgry string) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		j := scanner.Text()
-		t := Task{}
+		t := task{}
 		err := json.Unmarshal([]byte(j), &t)
 		if err != nil {
 			return err
@@ -276,6 +274,7 @@ func makeID(content, deadline string) string {
 	sha256 := sha256.Sum256([]byte(str))
 	shaID := sha256[:4]
 
+	//Json не воспринимает бинарные данные, поэтому переводим получившийся срез байт в строку
 	var b strings.Builder
 
 	for _, i := range shaID {
