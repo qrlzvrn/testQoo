@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
@@ -270,7 +271,7 @@ func showTaskList(ctgry string) error {
 
 func makeID(content, deadline string) string {
 
-	str := content + deadline
+	str := content + deadline + string(time.Now().Day()) + string(time.Now().Hour()) + string(time.Now().Minute()) + string(time.Now().Second())
 	sha256 := sha256.Sum256([]byte(str))
 	shaID := sha256[:4]
 
